@@ -15,8 +15,9 @@ class GalleriesTableViewController: UITableViewController {
     
     private lazy var fetchedResultsController: NSFetchedResultsController<Gallery> = {
         let request: NSFetchRequest<Gallery> = Gallery.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(key: "isRemoved", ascending: false)]
-
+        request.sortDescriptors = [NSSortDescriptor(key: "isRemoved", ascending: true),
+        NSSortDescriptor(key: "timeStamp", ascending: true)]
+ 
         let fetchedResultsController = NSFetchedResultsController<Gallery>(
             fetchRequest: request,
             managedObjectContext: container.viewContext,
@@ -58,10 +59,22 @@ class GalleriesTableViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
         if let sections = fetchedResultsController.sections, sections.count > 0 {
-            return sectionTitles[section]
-        } else {
-            return nil
+            if sections.count == 2 {
+                return sectionTitles[section]
+            }
+            // a hack to make illusion of empty section
+            else if sections.count == 1 {
+                if let gallery = fetchedResultsController.fetchedObjects?.first,
+                gallery.isRemoved {
+                    return sectionTitles[1]
+                }
+                else {
+                    return sectionTitles[0]
+                }
+            }
         }
+        
+        return nil
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -82,70 +95,32 @@ class GalleriesTableViewController: UITableViewController {
         return cell
     }
 
-//    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
-//        let collection = GalleriesCollection.sharedInstance
-//
-//        if editingStyle == .delete {
-//            if indexPath.section == 1 {
-//                collection.deletedGalleries.remove(at: indexPath.row)
-//                tableView.deleteRows(at: [indexPath], with: .fade)
-//            }
-//            else if indexPath.section == 0 {
-//
-//                tableView.performBatchUpdates({
-//                    changeStatus(forGallery: collection.availableGalleries[indexPath.row], with: true)
-//
-//                    //moveRows() is not used because of terrible animations it gives
-//                    tableView.deleteRows(at: [indexPath], with: .fade)
-//                    tableView.insertRows(at: [IndexPath(row: galleriesTitles[1].count-1, section: 1)], with: .left)
-//                }, completion: { _ in
-//                    //update collectionView after deletion
-//                    let index = IndexPath(row: self.galleriesTitles[1].count-1, section: 1)
-//                    self.performSegue(withIdentifier: "ImageCollection",
-//                                 sender: tableView.cellForRow(at: index))
-//                })
-//            }
-//        }
-//    }
+    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        if editingStyle == .delete {
+            if fetchedResultsController.object(at: indexPath).isRemoved {
+                container.viewContext.delete(fetchedResultsController.object(at: indexPath))
+            }
+            else {
+                fetchedResultsController.object(at: indexPath).isRemoved = true
+            }
+        }
+    }
     
-//    override func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-//        var swipeActions = UISwipeActionsConfiguration()
-//        
-//        if indexPath.section == 1 {
-//            let restoreAction = UIContextualAction(style: .normal, title: "Restore") { (contextualAction, view, boolValue) in
-//                boolValue(true)
-//                
-//                tableView.performBatchUpdates({
-//                    self.changeStatus(forGallery: GalleriesCollection.sharedInstance.deletedGalleries[indexPath.row], with: false)
-//                    
-//                    let newIndexPath = IndexPath(row: self.galleriesTitles[0].count-1, section: 0)
-//                    tableView.deleteRows(at: [indexPath], with: .fade)
-//                    tableView.insertRows(at: [newIndexPath], with: .left)
-//                    
-//                    //if I remove this reload, then on last restored item strange bug appears
-//                    //somehow the section title does not disapper till user makes any action
-//                    tableView.reloadData()
-//                })
-//                
-//            }
-//            restoreAction.backgroundColor = #colorLiteral(red: 0.4666666687, green: 0.7647058964, blue: 0.2666666806, alpha: 1)
-//            swipeActions = UISwipeActionsConfiguration(actions: [restoreAction])
-//        }
-//        
-//        return swipeActions
-//    }
-    
-    //change deleted status for gallery
-//    private func changeStatus(forGallery gallery: GalleriesCollection.Gallery, with deleted: Bool) {
-//        let collection = GalleriesCollection.sharedInstance
-//
-//        if deleted, let index = collection.availableGalleries.firstIndex(of: gallery) {
-//                collection.deletedGalleries.append(collection.availableGalleries.remove(at: index))
-//        }
-//        else if let index = collection.deletedGalleries.firstIndex(of: gallery) {
-//            collection.availableGalleries.append(collection.deletedGalleries.remove(at: index))
-//        }
-//    }
+    override func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        var swipeActions = UISwipeActionsConfiguration()
+        
+        if fetchedResultsController.object(at: indexPath).isRemoved {
+            let restoreAction = UIContextualAction(style: .normal, title: "Restore") { (contextualAction, view, boolValue) in
+                boolValue(true)
+                
+                self.fetchedResultsController.object(at: indexPath).isRemoved = false
+            }
+            restoreAction.backgroundColor = #colorLiteral(red: 0.4666666687, green: 0.7647058964, blue: 0.2666666806, alpha: 1)
+            swipeActions = UISwipeActionsConfiguration(actions: [restoreAction])
+        }
+        
+        return swipeActions
+    }
     
     @IBAction func addNewGallery(_ sender: UIBarButtonItem) {
         let newGallery = Gallery(context: container.viewContext)
@@ -155,6 +130,7 @@ class GalleriesTableViewController: UITableViewController {
             titles = fetchedObjects.map {$0.title!}
         }
         newGallery.title = "Untitled".madeUnique(withRespectTo: titles)
+        newGallery.timeStamp = Date()
     }
     
     @objc func editCell(_ sender: UITapGestureRecognizer) {
@@ -174,7 +150,7 @@ class GalleriesTableViewController: UITableViewController {
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if let cell = sender as? UITableViewCell, let indexPath = tableView.indexPath(for: cell) {
-            if indexPath.section == 1 {
+            if fetchedResultsController.object(at: indexPath).isRemoved {
                 if let navC = segue.destination as? UINavigationController,
                     let imageCollectionView = navC.topViewController as? ImageCollectionViewController {
                     imageCollectionView.gallery = nil
@@ -183,7 +159,7 @@ class GalleriesTableViewController: UITableViewController {
                 
                 return
             }
-            else if indexPath.section == 0 {
+            else {
                 if let navC = segue.destination as? UINavigationController,
                     let imageCollectionView = navC.topViewController as? ImageCollectionViewController {
                     imageCollectionView.gallery = fetchedResultsController.object(at: indexPath)

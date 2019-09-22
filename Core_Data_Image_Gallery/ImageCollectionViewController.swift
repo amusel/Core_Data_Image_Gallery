@@ -202,10 +202,9 @@ class ImageCollectionViewController: UICollectionViewController, UICollectionVie
             if let sourceIndexPath = item.sourceIndexPath {
                 collectionView.performBatchUpdates({
                     
-                    var items = images
-                    let removed = items.remove(at: sourceIndexPath.item)
-                    items.insert(removed, at: destinationIndexPath.item)
-                    gallery.images = NSOrderedSet(array: items)
+                    let removed = gallery.images?.object(at: sourceIndexPath.item) as! Image
+                    gallery.removeFromImages(at: sourceIndexPath.item)
+                    gallery.insertIntoImages(removed, at: destinationIndexPath.item)
                     
                     collectionView.deleteItems(at: [sourceIndexPath])
                     collectionView.insertItems(at: [destinationIndexPath])
@@ -231,9 +230,7 @@ class ImageCollectionViewController: UICollectionViewController, UICollectionVie
                         
                         DispatchQueue.main.async {
                             placeholderContext.commitInsertion { indexPath in
-                                var items = self.images
-                                items.insert(galleryItem, at: indexPath.item)
-                                self.gallery.images = NSOrderedSet(array: items)
+                                self.gallery.insertIntoImages(galleryItem, at: indexPath.item)
                             }
                         }
                     }
@@ -280,9 +277,7 @@ class ImageCollectionViewController: UICollectionViewController, UICollectionVie
         for item in session.items {
             if let galleryItem = item.localObject as? Image,
                 let index = images.firstIndex(of: galleryItem) {
-                var items = self.images
-                items.remove(at: index)
-                gallery.images = NSOrderedSet(array: items)
+                gallery.removeFromImages(at: index)
                 collectionView.reloadData()
             }
         }
